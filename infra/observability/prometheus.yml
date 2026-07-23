@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: clipforge-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:4000"]
+  - job_name: clipforge-ai
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["ai:8000"]

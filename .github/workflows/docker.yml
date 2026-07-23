@@ -1,0 +1,35 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+jobs:
+  build:
+    name: Build images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: api
+            dockerfile: infra/docker/api.Dockerfile
+            context: .
+          - name: web
+            dockerfile: infra/docker/web.Dockerfile
+            context: .
+          - name: ai
+            dockerfile: services/ai/Dockerfile
+            context: services/ai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build ${{ matrix.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          tags: clipforge-${{ matrix.name }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
