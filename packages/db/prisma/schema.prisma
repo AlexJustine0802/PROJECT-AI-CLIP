@@ -1,0 +1,703 @@
+// ClipForge — Prisma schema
+// PostgreSQL. Covers auth, teams/RBAC, projects, media, AI pipeline, billing,
+// credit wallet, usage analytics, model registry, and the ClipForge differentiators
+// (story-aware clips, clip series, quality scores, editable reasoning, AI profiles,
+// insight timeline).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================================================
+// Enums
+// ===========================================================================
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum PlanTier {
+  FREE
+  PRO
+  BUSINESS
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
+enum VideoStatus {
+  UPLOADING
+  UPLOADED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum PipelineStage {
+  UPLOAD
+  PROBE_METADATA
+  EXTRACT_AUDIO
+  TRANSCRIBE
+  DIARIZATION
+  SCENE_DETECT
+  SILENCE_DETECT
+  STORY_DETECT
+  HIGHLIGHT_SCORE
+  VIRALITY_SCORE
+  CLIP_SELECT
+  SMART_CROP
+  SUBTITLES
+  CAPTION_BURN
+  METADATA_GEN
+  THUMBNAIL
+  EXPORT
+}
+
+enum WorkerType {
+  CPU
+  GPU
+  PRIORITY
+  RETRY
+}
+
+enum AspectRatio {
+  R_9_16
+  R_16_9
+  R_1_1
+  R_4_5
+}
+
+enum Resolution {
+  P1080
+  P1440
+  P2160
+}
+
+enum Platform {
+  TIKTOK
+  INSTAGRAM
+  YOUTUBE_SHORTS
+  FACEBOOK
+  LINKEDIN
+  X
+  PODCAST
+  CUSTOM
+}
+
+enum EditingStyle {
+  PODCAST
+  EDUCATIONAL
+  GAMING
+  INTERVIEW
+  VLOG
+  NEWS
+  AUTO
+}
+
+enum TimelineEventType {
+  HOOK
+  EMOTION
+  SILENCE
+  SCENE_CHANGE
+  SPEAKER_CHANGE
+  KEYWORD
+}
+
+enum StorageProvider {
+  LOCAL
+  MINIO
+  S3
+  R2
+  SUPABASE
+}
+
+enum AiModelKind {
+  TRANSCRIPTION
+  DIARIZATION
+  LLM
+  VISION
+  EMBEDDING
+}
+
+enum CreditTxnType {
+  TOPUP
+  USAGE
+  REFUND
+  MONTHLY_ALLOCATION
+  ADJUSTMENT
+}
+
+enum NotificationType {
+  JOB_COMPLETED
+  JOB_FAILED
+  BILLING
+  SYSTEM
+  MENTION
+}
+
+// ===========================================================================
+// Auth (Auth.js / NextAuth compatible) + Users
+// ===========================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  passwordHash  String?
+  emailVerified DateTime?
+  isAdmin       Boolean   @default(false)
+  locale        String    @default("en")
+
+  // 2FA
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret  String?
+
+  accounts      Account[]
+  sessions      Session[]
+  memberships   Membership[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  apiKeys       ApiKey[]
+  aiProfile     AiProfile?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ===========================================================================
+// Teams / RBAC / Billing owner
+// ===========================================================================
+
+model Team {
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  memberships  Membership[]
+  projects     Project[]
+  subscription Subscription?
+  creditWallet CreditWallet?
+  usageRecords UsageRecord[]
+  invoices     Invoice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Membership {
+  id     String @id @default(cuid())
+  userId String
+  teamId String
+  role   Role   @default(MEMBER)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, teamId])
+  @@index([teamId])
+}
+
+// ===========================================================================
+// Projects / Videos / Clips
+// ===========================================================================
+
+model Project {
+  id           String       @id @default(cuid())
+  teamId       String
+  name         String
+  description  String?
+  editingStyle EditingStyle @default(AUTO)
+
+  team   Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  videos Video[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teamId])
+}
+
+model Video {
+  id        String      @id @default(cuid())
+  projectId String
+  title     String
+  status    VideoStatus @default(UPLOADING)
+
+  // Storage
+  storageProvider StorageProvider @default(MINIO)
+  storageKey      String
+  sizeBytes       BigInt?
+  originalName    String?
+  mimeType        String?
+
+  // Full media metadata (#9)
+  durationSec Float?
+  fps         Float?
+  bitrate     Int?
+  videoCodec  String?
+  width       Int?
+  height      Int?
+  rotation    Int?
+  aspectRatio String?
+  audioCodec  String?
+  sampleRate  Int?
+
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clips       Clip[]
+  clipSeries  ClipSeries[]
+  transcript  Transcript?
+  jobs        Job[]
+  timeline    TimelineEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model Clip {
+  id       String @id @default(cuid())
+  videoId  String
+  seriesId String?
+
+  title       String
+  startSec    Float
+  endSec      Float
+  aspectRatio AspectRatio  @default(R_9_16)
+  editingStyle EditingStyle @default(AUTO)
+
+  // ClipForge differentiators
+  qualityScore   Float?  // 0-100
+  viralityScore  Float?  // 0-100
+  hookScore      Float?  // 0-100
+  reasoning      String? @db.Text // editable AI explanation of why this clip was chosen
+  reasoningEdited Boolean @default(false)
+  seriesPart     Int?    // Part 1 / 2 / 3 within a series
+
+  // AI-generated metadata
+  aiTitle       String?
+  description   String? @db.Text
+  hashtags      String[]
+  storageKey    String?
+  thumbnailKey  String?
+
+  video     Video          @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  series    ClipSeries?    @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  subtitles Subtitle[]
+  exports   ExportTarget[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([videoId])
+  @@index([seriesId])
+}
+
+// Auto clip series (Part 1 / 2 / 3) — narrative continuity across clips (#differentiator)
+model ClipSeries {
+  id       String @id @default(cuid())
+  videoId  String
+  title    String
+  summary  String? @db.Text
+  clips    Clip[]
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([videoId])
+}
+
+// Insight timeline: hooks, emotions, silence, scene/speaker changes, keywords
+model TimelineEvent {
+  id        String            @id @default(cuid())
+  videoId   String
+  type      TimelineEventType
+  startSec  Float
+  endSec    Float?
+  label     String?
+  score     Float?
+  meta      Json?
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId, type])
+}
+
+model Transcript {
+  id        String @id @default(cuid())
+  videoId   String @unique
+  language  String @default("en")
+  fullText  String @db.Text
+  // Word/segment-level timing, speaker labels: [{start,end,text,speaker}]
+  segments  Json
+  wordCount Int    @default(0)
+  model     String? // which model produced it (registry key)
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model Subtitle {
+  id       String  @id @default(cuid())
+  clipId   String
+  language String  @default("en")
+  format   String  @default("ass") // srt | ass | vtt
+  styleKey String  @default("default") // subtitle-style plugin key
+  content  String  @db.Text
+  storageKey String?
+
+  clip Clip @relation(fields: [clipId], references: [id], onDelete: Cascade)
+
+  @@index([clipId])
+}
+
+model ExportTarget {
+  id          String      @id @default(cuid())
+  clipId      String
+  platform    Platform
+  presetKey   String      // references an ExportPreset
+  aspectRatio AspectRatio
+  resolution  Resolution  @default(P1080)
+  status      JobStatus   @default(QUEUED)
+  storageKey  String?
+  sizeBytes   BigInt?
+
+  clip Clip @relation(fields: [clipId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clipId])
+}
+
+// Configurable export presets (#11)
+model ExportPreset {
+  id          String      @id @default(cuid())
+  key         String      @unique // tiktok | instagram_reels | youtube_shorts | facebook_reels | podcast | custom
+  name        String
+  platform    Platform
+  aspectRatio AspectRatio
+  resolution  Resolution
+  fps         Int         @default(30)
+  maxDuration Int? // seconds
+  config      Json?
+  isSystem    Boolean     @default(true)
+
+  createdAt DateTime @default(now())
+}
+
+// ===========================================================================
+// Jobs / Queue-per-stage
+// ===========================================================================
+
+model Job {
+  id             String        @id @default(cuid())
+  videoId        String
+  status         JobStatus     @default(QUEUED)
+  stage          PipelineStage @default(UPLOAD)
+  workerType     WorkerType    @default(CPU)
+  pipelineVersion Int          @default(1) // reproducibility (#15)
+  progress       Float         @default(0)
+  queueName      String        @default("upload")
+  error          String?       @db.Text
+  // Per-stage timing/logs snapshot
+  stageLogs      Json?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+
+  video       Video         @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  usageRecord UsageRecord?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([videoId])
+  @@index([status, stage])
+}
+
+// ===========================================================================
+// Billing / Subscriptions / Credit wallet
+// ===========================================================================
+
+model Plan {
+  id             String   @id @default(cuid())
+  tier           PlanTier @unique
+  name           String
+  priceMonthly   Int      // cents
+  stripePriceId  String?
+  monthlyCredits Int      @default(0)
+  maxUploadMb    Int      @default(500)
+  maxExportRes   Resolution @default(P1080)
+  features       Json?
+
+  subscriptions Subscription[]
+
+  createdAt DateTime @default(now())
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  teamId               String             @unique
+  planId               String
+  status               SubscriptionStatus @default(ACTIVE)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Invoice {
+  id              String   @id @default(cuid())
+  teamId          String
+  stripeInvoiceId String?  @unique
+  amountDue       Int
+  amountPaid      Int
+  currency        String   @default("usd")
+  status          String
+  hostedUrl       String?
+  pdfUrl          String?
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([teamId])
+}
+
+model Coupon {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  percentOff    Int?
+  amountOff     Int?
+  maxRedemptions Int?
+  redeemedCount Int      @default(0)
+  expiresAt     DateTime?
+  active        Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+}
+
+model CreditWallet {
+  id       String @id @default(cuid())
+  teamId   String @unique
+  balance  Int    @default(0)
+
+  team         Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  transactions CreditTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CreditTransaction {
+  id          String        @id @default(cuid())
+  walletId    String
+  type        CreditTxnType
+  amount      Int           // positive = credit added, negative = consumed
+  balanceAfter Int
+  reason      String?
+  meta        Json?
+
+  wallet CreditWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([walletId])
+}
+
+// ===========================================================================
+// Usage analytics & cost estimation (#10, #18)
+// ===========================================================================
+
+model UsageRecord {
+  id     String @id @default(cuid())
+  teamId String
+  jobId  String? @unique
+
+  processingMs     Int    @default(0)
+  cpuSeconds       Float  @default(0)
+  gpuSeconds       Float  @default(0)
+  minutesProcessed Float  @default(0)
+  wordsTranscribed Int    @default(0)
+  clipsGenerated   Int    @default(0)
+  storageBytes     BigInt @default(0)
+  bandwidthBytes   BigInt @default(0)
+  estimatedCostUsd Float  @default(0)
+  modelKey         String?
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  job  Job? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([teamId])
+}
+
+// ===========================================================================
+// AI Model Registry (#6)
+// ===========================================================================
+
+model AiModel {
+  id           String      @id @default(cuid())
+  key          String      @unique // e.g. whisper-small, gpt-4o, claude-3
+  name         String
+  kind         AiModelKind
+  provider     String      // whisper | openai | anthropic | google | deepgram | assemblyai | local
+  isDefault    Boolean     @default(false)
+  experimental Boolean     @default(false)
+  // rough cost per unit for cost estimation
+  costPerMinuteUsd Float?
+  costPer1kTokensUsd Float?
+  config       Json?
+  enabled      Boolean     @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@index([kind])
+}
+
+// ===========================================================================
+// Personalized AI profile (#differentiator) — learns user editing preferences
+// ===========================================================================
+
+model AiProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  preferredStyle    EditingStyle @default(AUTO)
+  preferredPlatforms Platform[]
+  captionStyleKey   String       @default("default")
+  minClipQuality    Float        @default(60)
+  // learned weights & feedback signals
+  preferences       Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ===========================================================================
+// Notifications / Audit / API keys
+// ===========================================================================
+
+model Notification {
+  id      String           @id @default(cuid())
+  userId  String
+  type    NotificationType
+  title   String
+  body    String?
+  read    Boolean          @default(false)
+  meta    Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+model AuditLog {
+  id       String  @id @default(cuid())
+  userId   String?
+  action   String
+  entity   String?
+  entityId String?
+  ip       String?
+  meta     Json?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([entity, entityId])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String
+  hashedKey  String    @unique
+  prefix     String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}

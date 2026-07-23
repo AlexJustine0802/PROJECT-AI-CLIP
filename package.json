@@ -1,0 +1,33 @@
+{
+  "name": "clipforge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ClipForge — AI platform that turns long-form videos into viral short-form clips.",
+  "license": "MIT",
+  "packageManager": "pnpm@9.7.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "db:generate": "pnpm --filter @clipforge/db generate",
+    "db:migrate": "pnpm --filter @clipforge/db migrate",
+    "db:seed": "pnpm --filter @clipforge/db seed",
+    "sdk:generate": "pnpm --filter @clipforge/sdk generate"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "turbo": "^2.0.9",
+    "typescript": "^5.5.4"
+  }
+}

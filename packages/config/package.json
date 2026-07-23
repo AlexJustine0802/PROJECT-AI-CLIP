@@ -1,0 +1,13 @@
+{
+  "name": "@clipforge/config",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    "./eslint": "./eslint.base.cjs",
+    "./tsconfig": "./tsconfig.base.json"
+  },
+  "scripts": {
+    "lint": "echo \"(config) no lint\"",
+    "typecheck": "echo \"(config) no typecheck\""
+  }
+}
