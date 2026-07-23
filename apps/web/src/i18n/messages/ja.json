@@ -1,0 +1,11 @@
+{
+  "brand": "ClipForge",
+  "nav": { "features": "機能", "pricing": "料金", "signIn": "サインイン", "dashboard": "ダッシュボード" },
+  "landing": {
+    "headline": "1本の長い動画を、物語性のあるショート動画シリーズに。",
+    "sub": "ClipForge は大きな瞬間だけでなく物語を検出し、各クリップを採点し、選んだ理由を説明します。主導権はあなたに。",
+    "cta": "無料で始める",
+    "secondary": "仕組みを見る"
+  },
+  "dashboard": { "title": "ダッシュボード", "recent": "最近のアップロード", "queue": "処理キュー", "credits": "クレジット" }
+}

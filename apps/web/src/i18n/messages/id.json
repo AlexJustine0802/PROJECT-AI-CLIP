@@ -1,0 +1,11 @@
+{
+  "brand": "ClipForge",
+  "nav": { "features": "Fitur", "pricing": "Harga", "signIn": "Masuk", "dashboard": "Dasbor" },
+  "landing": {
+    "headline": "Ubah satu video panjang menjadi rangkaian klip pendek berbasis cerita.",
+    "sub": "ClipForge mendeteksi narasi — bukan sekadar momen keras — menilai setiap klip, dan menjelaskan alasannya. Anda tetap memegang kendali.",
+    "cta": "Mulai gratis",
+    "secondary": "Lihat cara kerjanya"
+  },
+  "dashboard": { "title": "Dasbor", "recent": "Unggahan terbaru", "queue": "Antrean proses", "credits": "Kredit" }
+}

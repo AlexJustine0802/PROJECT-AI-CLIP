@@ -1,0 +1,11 @@
+{
+  "brand": "ClipForge",
+  "nav": { "features": "功能", "pricing": "定价", "signIn": "登录", "dashboard": "仪表板" },
+  "landing": {
+    "headline": "把一段长视频变成一系列有故事性的短视频。",
+    "sub": "ClipForge 检测叙事脉络，而不仅是高潮片段，为每个片段打分，并解释选择理由。主动权始终在你手中。",
+    "cta": "免费开始",
+    "secondary": "了解工作原理"
+  },
+  "dashboard": { "title": "仪表板", "recent": "最近上传", "queue": "处理队列", "credits": "积分" }
+}

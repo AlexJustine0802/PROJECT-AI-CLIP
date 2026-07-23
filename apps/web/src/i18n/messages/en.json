@@ -1,0 +1,11 @@
+{
+  "brand": "ClipForge",
+  "nav": { "features": "Features", "pricing": "Pricing", "signIn": "Sign in", "dashboard": "Dashboard" },
+  "landing": {
+    "headline": "Turn one long video into a series of story-driven shorts.",
+    "sub": "ClipForge detects narratives — not just loud moments — scores every clip, and explains why it chose them. You stay in control.",
+    "cta": "Start for free",
+    "secondary": "See how it works"
+  },
+  "dashboard": { "title": "Dashboard", "recent": "Recent uploads", "queue": "Processing queue", "credits": "Credits" }
+}
