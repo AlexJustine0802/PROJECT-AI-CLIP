@@ -23,6 +23,23 @@ via configuration.
                                     └────────────────────────┘
 ```
 
+## Runtime drivers (no Docker required)
+
+Every infrastructure concern is a swappable driver chosen by `.env`, so the whole app runs on
+**Node.js alone** in development and scales up to managed services in production — the same
+codebase, configuration only:
+
+| Concern | Node-only default | Production driver |
+| --- | --- | --- |
+| Database | SQLite (`file:./dev.db`) | PostgreSQL |
+| Queue | in-process (`QUEUE_DRIVER=memory`) | BullMQ + Redis |
+| Cache | in-memory (`CACHE_DRIVER=memory`) | Redis |
+| AI pipeline | in-process Node (`AI_DRIVER=node`) | HTTP → Python FastAPI (ffmpeg/Whisper) |
+| Storage | local filesystem | S3 / R2 / MinIO / Supabase |
+
+The in-process queue and Node AI driver call the exact same `PipelineRunnerService` as their
+production counterparts, so behavior is identical across environments.
+
 ## Layers (per deployable)
 
 - **Domain / application**: pure logic — `packages/core` (ports, feature flags, cost

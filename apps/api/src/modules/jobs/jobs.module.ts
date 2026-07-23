@@ -1,22 +1,19 @@
-import { Body, Controller, Get, Injectable, Module, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Injectable, Module, Param, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { BullModule, InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 import { Public } from '../../common/decorators';
 import { PrismaService } from '../../infra/prisma/prisma.service';
-import { AiClientService } from './ai-client.service';
-import { JobsGateway } from './jobs.gateway';
-import { JobsProcessor } from './jobs.processor';
+import { JobsGateway } from '../../realtime/jobs.gateway';
+import { JOB_QUEUE, type JobQueue } from '../../queue/job-queue.port';
 
 @Injectable()
 export class JobsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: JobsGateway,
-    @InjectQueue('transcription') private readonly queue: Queue,
+    @Inject(JOB_QUEUE) private readonly queue: JobQueue,
   ) {}
 
-  /** Create a Job row and enqueue the pipeline entry job. */
+  /** Create a Job row and enqueue the pipeline job (in-process or BullMQ, per config). */
   async enqueue(input: {
     videoId: string;
     teamId: string;
@@ -28,7 +25,7 @@ export class JobsService {
       data: { videoId: input.videoId, status: 'QUEUED', stage: 'UPLOAD', queueName: 'transcription' },
     });
     await this.prisma.video.update({ where: { id: input.videoId }, data: { status: 'PROCESSING' } });
-    await this.queue.add('process', { jobId: job.id, ...input }, { jobId: job.id });
+    await this.queue.enqueue({ jobId: job.id, ...input });
     return { jobId: job.id };
   }
 
@@ -36,7 +33,7 @@ export class JobsService {
     return this.prisma.job.findUnique({ where: { id }, include: { usageRecord: true } });
   }
 
-  /** Progress callback posted by the AI service; re-broadcast over WebSocket. */
+  /** Progress callback posted by the HTTP AI service; re-broadcast over WebSocket. */
   async onProgress(jobId: string, body: { stage: string; progress: number; message?: string }) {
     this.gateway.emit(jobId, {
       type: 'progress',
@@ -46,7 +43,7 @@ export class JobsService {
     });
     await this.prisma.job.update({
       where: { id: jobId },
-      data: { stage: body.stage.toUpperCase() as any, progress: body.progress },
+      data: { stage: body.stage.toUpperCase(), progress: body.progress },
     });
     return { ok: true };
   }
@@ -70,9 +67,8 @@ export class JobsController {
 }
 
 @Module({
-  imports: [BullModule.registerQueue({ name: 'transcription' })],
-  providers: [JobsService, JobsProcessor, JobsGateway, AiClientService],
+  providers: [JobsService],
   controllers: [JobsController],
-  exports: [JobsService, JobsGateway],
+  exports: [JobsService],
 })
 export class JobsModule {}

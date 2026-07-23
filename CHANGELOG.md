@@ -6,6 +6,23 @@ All notable changes to ClipForge are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Docker is no longer required for development.** The entire dev environment now runs on
+  Windows 11 (and macOS/Linux) with only Node.js. Infrastructure is driver-based and selected
+  via `.env`:
+  - **Database → SQLite** by default (`file:./dev.db`); schema made portable (String value
+    sets instead of native enums, JSON-encoded String fields instead of `Json`/arrays) so it
+    still targets PostgreSQL in production by changing one `provider` line.
+  - **Queue → in-process** driver (`QUEUE_DRIVER=memory`); BullMQ/Redis is now opt-in.
+  - **Cache → in-memory** driver (`CACHE_DRIVER=memory`); Redis is opt-in.
+  - **AI pipeline → in-process Node** driver (`AI_DRIVER=node`) that runs story detection,
+    scoring, clip series, reasoning, and the insight timeline with no Python/ffmpeg; the
+    Python FastAPI service becomes an opt-in `http` driver for real inference.
+  - **Storage → local filesystem** by default.
+- Added `pnpm setup` (cross-platform Node script) and `pnpm db:push` for one-command bootstrap.
+- Extracted `PipelineRunnerService` (driver-agnostic) and a `RealtimeModule`; Docker/Compose
+  are retained as an optional prod-like stack.
+
 ### Added
 - Initial monorepo scaffold (Turborepo + pnpm): `apps/web`, `apps/api`, `services/ai`,
   `packages/{db,core,types,config,sdk}`.

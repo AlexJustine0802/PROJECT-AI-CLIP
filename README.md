@@ -61,34 +61,44 @@ abstractions** (storage, AI models, cache), **feature flags**, **queue-per-stage
 worker pools**, **API versioning**, **WebSocket realtime**, **OpenTelemetry + Prometheus**,
 and **structured logging**. See [`docs/architecture.md`](docs/architecture.md).
 
-## Quick start
+## Quick start (Windows / macOS / Linux — Node.js only, no Docker)
 
-```bash
-# 1. Prerequisites: Node 20+, pnpm 9+, Python 3.11+, Docker, ffmpeg
+The default configuration needs **nothing but Node.js 20+ and pnpm 9+**. No Docker,
+PostgreSQL, Redis, MinIO, or Python required — it uses SQLite, an in-process queue, an
+in-memory cache, local file storage, and an in-process Node AI pipeline.
+
+```powershell
+# 1. Install (from the repo root)
 pnpm install
 
-# 2. Environment
-cp .env.example .env
+# 2. One-time setup: creates .env, the SQLite DB, and seed data
+pnpm setup
 
-# 3. Infra (postgres, redis, minio)
-docker compose -f infra/docker-compose.yml up -d postgres redis minio
-
-# 4. Database
-pnpm db:generate && pnpm db:migrate && pnpm db:seed
-
-# 5. AI service
-cd services/ai && pip install -e ".[dev]" && uvicorn app.main:app --reload --port 8000
-
-# 6. API + Web (new terminal, from repo root)
+# 3. Start API + Web together
 pnpm dev
 ```
 
-- Web → http://localhost:3000
+- Web → http://localhost:3000  (sign in with **demo@clipforge.local / password123**)
 - API (Swagger) → http://localhost:4000/api/docs
 - GraphQL → http://localhost:4000/graphql
-- AI service → http://localhost:8000/docs
 
-Run the whole stack with one command: `docker compose -f infra/docker-compose.yml up`.
+That's it — upload a video and the full `upload → transcribe → story detect → clip →
+subtitles → export` flow runs in-process.
+
+### Optional upgrades (opt-in, not required)
+
+Everything is driver-based, selected by `.env`. Turn these on only if you want them:
+
+| Want… | Set in `.env` | Needs |
+| --- | --- | --- |
+| Real ffmpeg + Whisper inference | `AI_DRIVER=http` | Python service (`services/ai`) |
+| Scaled background workers | `QUEUE_DRIVER=bullmq` | Redis |
+| Shared/multi-instance cache | `CACHE_DRIVER=redis` | Redis |
+| Cloud object storage | `STORAGE_PROVIDER=s3\|r2\|supabase` | provider keys |
+| PostgreSQL | schema `provider = "postgresql"` | Postgres |
+
+Docker is still available for a full containerized stack (`infra/docker-compose.yml`) but is
+entirely optional. See [`docs/deployment.md`](docs/deployment.md).
 
 ## Documentation
 

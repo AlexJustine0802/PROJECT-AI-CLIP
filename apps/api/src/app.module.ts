@@ -10,6 +10,8 @@ import { configuration } from './config/configuration';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { CacheModule } from './infra/cache/cache.module';
 import { StorageModule } from './infra/storage/storage.module';
+import { RealtimeModule } from './realtime/realtime.module';
+import { AiModule } from './ai/ai.module';
 import { QueueModule } from './queue/queue.module';
 
 import { JwtAuthGuard } from './common/jwt-auth.guard';
@@ -46,6 +48,8 @@ import { GraphqlFeatureModule } from './modules/graphql/graphql.module';
     PrismaModule,
     CacheModule,
     StorageModule,
+    RealtimeModule,
+    AiModule,
     QueueModule,
 
     // Features

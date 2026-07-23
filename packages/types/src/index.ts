@@ -119,6 +119,10 @@ export interface ClipCandidate {
   reasoning: string; // editable AI explanation
   seriesPart?: number;
   editingStyle: EditingStyleName;
+  // AI-generated metadata (optional; populated by the metadata stage)
+  aiTitle?: string;
+  description?: string;
+  hashtags?: string[];
 }
 
 // ---------------------------------------------------------------------------

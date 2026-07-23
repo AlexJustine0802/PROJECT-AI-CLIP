@@ -1,10 +1,23 @@
 # Database
 
-PostgreSQL via Prisma (`packages/db/prisma/schema.prisma`). Generate + migrate + seed:
+Prisma (`packages/db/prisma/schema.prisma`). **SQLite by default** for zero-dependency local
+dev (a single `dev.db` file — no server, works on Windows with only Node). The schema is
+**portable**: it uses `String` fields instead of native enums, and JSON-encoded `String`
+fields instead of the `Json` type / scalar lists, so it is valid on **both SQLite and
+PostgreSQL**. To use Postgres in production, change the datasource `provider` to `"postgresql"`
+and set a `postgresql://` `DATABASE_URL` — no other schema edits are needed.
+
+Generate + create/sync + seed:
 
 ```bash
-pnpm db:generate && pnpm db:migrate && pnpm db:seed
+pnpm db:generate && pnpm db:push && pnpm db:seed
+# or simply:  pnpm setup
 ```
+
+String value sets (e.g. `Role`, `PlanTier`, `JobStatus`, `Platform`, `EditingStyle`) are
+documented at the top of the schema and typed in `@clipforge/types`. JSON columns
+(`Transcript.segments`, `Clip.hashtags`, `*.meta`, …) are stored as JSON strings and
+parsed in the app layer.
 
 ## Model groups
 

@@ -11,14 +11,15 @@ import type { JobEvent } from '@clipforge/types';
 
 /**
  * Realtime job updates (#14) — replaces polling. Clients join a room per jobId and receive
- * progress / live logs / current stage / ETA / completion events pushed by the processor.
+ * progress / live logs / current stage / ETA / completion events pushed by the pipeline runner.
+ * Works identically whether jobs run in-process (Node) or via BullMQ workers.
  */
 @WebSocketGateway({ namespace: '/jobs', cors: { origin: true } })
 export class JobsGateway implements OnGatewayConnection {
   @WebSocketServer() server!: Server;
 
   handleConnection(_client: Socket): void {
-    // Auth for sockets can be enforced via a handshake token; omitted for brevity.
+    // Socket auth via handshake token can be enforced here; omitted for brevity.
   }
 
   @SubscribeMessage('subscribe')

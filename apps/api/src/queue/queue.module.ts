@@ -1,36 +1,32 @@
 import { Global, Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
-import { QUEUE_NAMES } from './queue.constants';
+import { JOB_QUEUE } from './job-queue.port';
+import { PipelineRunnerService } from './pipeline-runner.service';
+import { InProcessQueue } from './in-process.queue';
+import { BullmqQueue } from './bullmq.queue';
 
 /**
- * Registers one BullMQ queue per pipeline stage group so each can scale independently (#4).
- * Connection details come from config; consumers (processors) live in feature modules.
+ * Provides the JobQueue driver selected by config (#queue abstraction). Default `memory` runs
+ * jobs in-process (no Redis/Docker); `bullmq` connects to Redis for scaled production workers.
+ * The queue-per-stage / worker-pool topology lives in queue.constants.ts and is honored by the
+ * BullMQ driver.
  */
 @Global()
 @Module({
-  imports: [
-    BullModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const url = new URL(config.get<string>('redis.url')!);
-        return {
-          connection: {
-            host: url.hostname,
-            port: Number(url.port || 6379),
-            password: url.password || undefined,
-          },
-          defaultJobOptions: {
-            attempts: 3,
-            backoff: { type: 'exponential', delay: 2000 },
-            removeOnComplete: 1000,
-            removeOnFail: 5000,
-          },
-        };
+  providers: [
+    PipelineRunnerService,
+    InProcessQueue,
+    {
+      provide: JOB_QUEUE,
+      inject: [ConfigService, InProcessQueue, PipelineRunnerService],
+      useFactory: (config: ConfigService, inProcess: InProcessQueue, runner: PipelineRunnerService) => {
+        if (config.get<string>('queue.driver') === 'bullmq') {
+          return new BullmqQueue(config.get<string>('redis.url')!, runner);
+        }
+        return inProcess;
       },
-    }),
-    ...QUEUE_NAMES.map((name) => BullModule.registerQueue({ name })),
+    },
   ],
-  exports: [BullModule],
+  exports: [JOB_QUEUE, PipelineRunnerService],
 })
 export class QueueModule {}

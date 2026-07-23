@@ -1,14 +1,55 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Redis } from 'ioredis';
 import type { CachePort } from '@clipforge/core';
 
-export const REDIS = Symbol('REDIS');
 export const CACHE = Symbol('CACHE');
 
-/** Redis-backed CachePort adapter (#19): transcripts, metadata, thumbnails, hot projects. */
+/**
+ * In-memory CachePort (default, CACHE_DRIVER=memory) — no Redis, no Docker. Values expire via
+ * per-key timers. Good for single-process dev; for multi-instance prod use the Redis driver.
+ */
+class MemoryCache implements CachePort {
+  private readonly store = new Map<string, { value: unknown; expires?: number }>();
+
+  async get<T>(key: string): Promise<T | null> {
+    const hit = this.store.get(key);
+    if (!hit) return null;
+    if (hit.expires && hit.expires < Date.now()) {
+      this.store.delete(key);
+      return null;
+    }
+    return hit.value as T;
+  }
+
+  async set<T>(key: string, value: T, ttlSec?: number): Promise<void> {
+    this.store.set(key, { value, expires: ttlSec ? Date.now() + ttlSec * 1000 : undefined });
+  }
+
+  async del(key: string): Promise<void> {
+    this.store.delete(key);
+  }
+
+  async wrap<T>(key: string, ttlSec: number, compute: () => Promise<T>): Promise<T> {
+    const cached = await this.get<T>(key);
+    if (cached !== null) return cached;
+    const fresh = await compute();
+    await this.set(key, fresh, ttlSec);
+    return fresh;
+  }
+}
+
+/**
+ * Redis-backed CachePort (CACHE_DRIVER=redis) — lazy-loads ioredis so the default memory path
+ * never requires it. Use for horizontally-scaled deployments.
+ */
 class RedisCache implements CachePort {
-  constructor(private readonly redis: Redis) {}
+  private readonly redis: any;
+
+  constructor(redisUrl: string) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { Redis } = require('ioredis');
+    this.redis = new Redis(redisUrl, { maxRetriesPerRequest: null });
+  }
 
   async get<T>(key: string): Promise<T | null> {
     const raw = await this.redis.get(key);
@@ -38,18 +79,14 @@ class RedisCache implements CachePort {
 @Module({
   providers: [
     {
-      provide: REDIS,
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => new Redis(config.get<string>('redis.url')!, {
-        maxRetriesPerRequest: null,
-      }),
-    },
-    {
       provide: CACHE,
-      inject: [REDIS],
-      useFactory: (redis: Redis) => new RedisCache(redis),
+      inject: [ConfigService],
+      useFactory: (config: ConfigService): CachePort =>
+        config.get<string>('cache.driver') === 'redis'
+          ? new RedisCache(config.get<string>('redis.url')!)
+          : new MemoryCache(),
     },
   ],
-  exports: [REDIS, CACHE],
+  exports: [CACHE],
 })
 export class CacheModule {}

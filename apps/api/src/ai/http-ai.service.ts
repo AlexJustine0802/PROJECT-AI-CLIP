@@ -1,11 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { PipelineRunRequest, PipelineRunResult } from '@clipforge/types';
+import type { AiPipeline } from './ai.port';
 
-/** Thin client for the Python AI service. The only place the API knows how to reach it. */
+/**
+ * HTTP driver — delegates to the Python FastAPI service for real inference
+ * (ffmpeg + faster-whisper + PySceneDetect). Selected with AI_DRIVER=http.
+ */
 @Injectable()
-export class AiClientService {
-  private readonly logger = new Logger('AiClient');
+export class HttpAiService implements AiPipeline {
+  private readonly logger = new Logger('HttpAi');
   private readonly baseUrl: string;
 
   constructor(config: ConfigService) {
@@ -26,7 +30,6 @@ export class AiClientService {
     return (await res.json()) as PipelineRunResult;
   }
 
-  // The AI service uses snake_case (pydantic); map the camelCase contract across the wire.
   private toSnake(req: PipelineRunRequest): Record<string, unknown> {
     return {
       job_id: req.jobId,

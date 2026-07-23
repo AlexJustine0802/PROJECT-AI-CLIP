@@ -2,12 +2,20 @@
 
 Copy `.env.example` → `.env`. Every variable is documented there; highlights below.
 
+## Runtime drivers (Node-only by default — no Docker)
+| Var | Default | Purpose |
+| --- | --- | --- |
+| `QUEUE_DRIVER` | `memory` | `memory` (in-process) or `bullmq` (needs `REDIS_URL`) |
+| `CACHE_DRIVER` | `memory` | `memory` (in-process) or `redis` (needs `REDIS_URL`) |
+| `AI_DRIVER` | `node` | `node` (in-process pipeline) or `http` (Python service at `AI_SERVICE_URL`) |
+| `STORAGE_PROVIDER` | `local` | `local` filesystem, or `minio`/`s3`/`r2`/`supabase` |
+
 ## Core
 | Var | Purpose |
 | --- | --- |
-| `DATABASE_URL` | PostgreSQL connection string |
-| `REDIS_URL` | Redis (queues, cache, rate limiting) |
-| `AI_SERVICE_URL` | URL of the FastAPI AI service |
+| `DATABASE_URL` | `file:./dev.db` (SQLite) by default; a `postgresql://` URL for Postgres |
+| `REDIS_URL` | Only used when a Redis-backed driver is selected |
+| `AI_SERVICE_URL` | Only used when `AI_DRIVER=http` |
 | `JWT_SECRET` / `AUTH_SECRET` | Shared HS256 secret (API validates Auth.js tokens) |
 
 ## Storage (provider abstraction)

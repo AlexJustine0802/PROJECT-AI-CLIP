@@ -11,8 +11,15 @@ export const configuration = () => ({
   aiServiceUrl: process.env.AI_SERVICE_URL ?? 'http://localhost:8000',
   apiUrl: process.env.API_URL ?? 'http://localhost:4000',
 
-  database: { url: process.env.DATABASE_URL ?? '' },
+  database: { url: process.env.DATABASE_URL ?? 'file:./dev.db' },
   redis: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
+
+  // Runtime drivers — default to zero-dependency Node-only options (no Docker).
+  // queue:  memory (in-process) | bullmq (Redis)
+  // cache:  memory (in-process) | redis
+  // ai:     node   (in-process) | http (Python FastAPI service)
+  queue: { driver: process.env.QUEUE_DRIVER ?? 'memory' },
+  cache: { driver: process.env.CACHE_DRIVER ?? 'memory' },
 
   jwt: {
     secret: process.env.JWT_SECRET ?? 'dev-insecure-secret-change-me',
@@ -38,6 +45,7 @@ export const configuration = () => ({
   },
 
   ai: {
+    driver: process.env.AI_DRIVER ?? 'node',
     transcribeModel: process.env.AI_TRANSCRIBE_MODEL ?? 'whisper-small',
     pipelineVersion: parseInt(process.env.AI_PIPELINE_VERSION ?? '1', 10),
   },
